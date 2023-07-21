@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools >=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sparque"
+version = "0.0.0"
+description = "pre-alpha version of parcellation evaluation package"
+authors = [
+  { name = "Anna Xu", email = "xua@stanford.edu" },
+]
+maintainers = [
+  { name = "Anna Xu", email = "xua@stanford.edu" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "nilearn",
+    "nibabel",
+    "neuromaps",
+    "pandas",
+    "tables"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/anna-xu/sparque"
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+precision = 2
+
+[tool.coverage.run]
+branch = true
+omit = [
+    '*test*',
+    '*__init__*',
+]
+
+[tool.ruff]
+ignore = []
+line-length = 90
+select = [
+    "E",
+    "F",
+    "W",
+    "I001",
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
