@@ -20,14 +20,7 @@ def run_all_metrics(scans,
                     reliability_conn_file = None,
                     func_conn_col_start = 3):
     '''
-    Inputs:
-    scans - either a directory of scans or a list of nibabel loaded scans
-    parc_name - name of parcellation as a string
-    parc_fdata - optional argument, float data for parcellation for calculating functional homogeneity
-    loaded_surface_parc - optional argument, list of the parcellation (filename as string) loaded as surface data
-    func_conn_file - optional argument to use with reliability or svc; a file with the upper triangle of the functional connectivity matrix for each scan OR a dataframe
-    num_iteractions - optional argument to include number of iterations to run for reliability
-    frac_to_sample - optional argument to include fraction of data to sample during each iteraction of reliability estimate
+    Function to save metric outputs (used in `run_parcel_eval()`)
     '''
 
     eval_data = {'parcellation': [parc_name]}
@@ -41,15 +34,11 @@ def run_all_metrics(scans,
         
         elif curr_metric == 'reliability':
 
-            # print(reliability.run_avg_corr_connmats)
-
             temp_avg_corr_connmat_df = reliability.reliability_multiple_subjects(reliability_conn_file, 'subject', f'{parc_name}_reliabilities_{datetime.now()}.h5', func_conn_col_start)
 
             temp_eval_data_df = reliability.get_reliability(temp_avg_corr_connmat_df)
 
-            # print(temp_eval_data_df['avg_corr'].iloc[0])
             eval_data['reliability'] = np.mean(temp_eval_data_df['mean_reliability'])
-            # eval_data['reliability'] = [temp_eval_data_df['reliability'].iloc[0]]
             
         elif curr_metric == 'svc':
             mean_acc, scores = svc.run_svc_with_shuffle_split(func_conn_file)
@@ -77,8 +66,6 @@ def run_all_metrics(scans,
             eval_data['L_DCBC'] = [temp_eval_data_df['DCBC'][temp_eval_data_df['hemisphere'] == 'L']]
             eval_data['R_DCBC'] = [temp_eval_data_df['DCBC'][temp_eval_data_df['hemisphere'] == 'R']]
 
-        # eval_data_df = pd.merge(eval_data_df, temp_eval_data_df, on = ['parcellation'])
-
     eval_data_df = pd.DataFrame.from_dict(eval_data)
     
     return eval_data_df
@@ -90,17 +77,33 @@ def run_parcel_eval(parcellations,
                     dist_file = None,
                     func_conn_file = None,
                     func_conn_col_start = 3):
+    """
+    Wrapper function to run specified parcellations and metrics. 
 
-    '''
-    n_parcels (optional): a list of number of parcels for each parcellation, include None in list if number of parcels is not relevant
+    Parameters
+    ----------
+    parcellations : array_like
+        List of parcellation names as str to run 
+    metrics : array_like
+        List of metrics as str to run (currently only accepts 'fc_homogeneity', 'dcbc', 'reliability', 'svc)
+    scans (optional): array_like
+        List of scans to analyze 
+    parcellation_df : dataframe object
+        Dataframe containing parcellation name, associated parcellation file, number of parcels, associated surface image file (left), associated surface image file (right). You can run `parcellation_dict` and look at `parcellation_df` for example of default. 
+    dist_file (optional): str
+        Location of distance matrix file for DCBC. Please see DCBC GitHub repo for more information on obtaining distance matrix file (https://github.com/DiedrichsenLab/DCBC). Since this file is big, it cannot be readily uploaded onto GitHub repo.
+    func_conn_file (optional): str or Dataframe 
+        csv file containing subject, session, and upper triangle of functional connectivity matrix; to be used to measure reliability and classification accuracy
+    func_conn_col_start : int
+        Index of where the edge list values start. If output from `func_conn.conn_from_dir`, edge list values start at column 3. 
 
-    dist_file (optional): location of distance matrix file for DCBC
-
-    func_conn_file (optional): csv file containing subject, session, and upper triangle of functional connectivity matrix; to be used to measure reliability and classification accuracy
-    '''
+    Returns
+    -------
+    array_like  
+        Upper triangle of matrix of reliabilities across pairs of runs 
+    """
     metric_dfs = []
 
-    # run cluster parcellations
     for _, curr_parc in enumerate(parcellations):
         print(f'Computing {curr_parc}') 
 
@@ -117,17 +120,17 @@ def run_parcel_eval(parcellations,
             _, parc_fdata = utils.load_data(parcellation_file)
         else:
             parc_fdata = None
-            
-        if 'reliability' in metrics: 
+
+        if func_conn_file is not None:
             if isinstance(func_conn_file, pd.DataFrame):
                 conn_df = func_conn_file
             else:
                 conn_df = pd.read_csv(func_conn_file)
+
+        if 'reliability' in metrics: 
             reliability_df = conn_df.copy()
             if 'label' in reliability_df.columns:
                 reliability_df = reliability_df.drop('label', axis = 'columns')
-            # reliability_df = reliability.column_to_list('fc', fc_column_start, reliability_df)
-            # reliability_df.to_csv(f'{curr_parc}_reliability_df_used.csv')
         else:
             reliability_df = None
             conn_df = func_conn_file 

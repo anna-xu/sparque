@@ -12,7 +12,4 @@ def run_cluster_parc(datafiles, method, n_parcels, output_name):
     cluster_parc_img = cluster_parc.labels_img_
     cluster_parc_img.to_filename(output_name)
 
-    # cluster_parc_fdata = nb.load(output_name).get_fdata()
-
     return cluster_parc
-    # , cluster_parc_fdata

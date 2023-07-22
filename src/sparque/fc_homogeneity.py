@@ -13,7 +13,6 @@ def calc_fc_homogeneity(atlas_fdata, fdata):
         parcel_data = fdata[parcel]
         conn_vox_parcel = np.corrcoef(parcel_data)
         curr_fc_homogeneity = np.mean(conn_vox_parcel)
-        # print(curr_fc_homogeneity)
         fc_homogeneity += [curr_fc_homogeneity]
 
     return np.mean(fc_homogeneity), fc_homogeneity 
@@ -21,14 +20,9 @@ def calc_fc_homogeneity(atlas_fdata, fdata):
 def run_fc_homogeneity_from_dir(scans, parc_name, parc_fdata, csv_filename):
     fchs_df = {'parcellation': [], 'subject': [], 'session': [], 'fchs': [], 'all_fchs': []}
 
-    # _, scans_fdata = utils.load_multiple_scans(scans)
-
     for i, curr_scan in enumerate(scans):
-        # fdata = scans_fdata[i]
         
         _, fdata = utils.load_data(curr_scan)
-
-        # assumes a BIDS-formatted dataset
 
         scan_split = str(curr_scan).split("/")[-1].split("_")
         
