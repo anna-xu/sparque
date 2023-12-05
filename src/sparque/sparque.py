@@ -18,7 +18,9 @@ def run_all_metrics(scans,
                     loaded_surface_parc = None, 
                     func_conn_file = None,
                     reliability_conn_file = None,
-                    func_conn_col_start = 3):
+                    func_conn_col_start = 3,
+                    surface=False,
+                    null_labels = ()):
     '''
     Function to save metric outputs (used in `run_parcel_eval()`)
     '''
@@ -28,7 +30,7 @@ def run_all_metrics(scans,
     for _, curr_metric in enumerate(metrics):
         print(f'Computing {curr_metric}')
         if curr_metric == 'fc_homogeneity':
-            temp_eval_data_df = fc_homogeneity.average_fc_homogeneity(scans, parc_name, parc_fdata, f'{parc_name}_fch_{datetime.now()}.csv')
+            temp_eval_data_df = fc_homogeneity.average_fc_homogeneity(scans, parc_name, parc_fdata, f'{parc_name}_fch_{datetime.now()}.csv', surface, null_labels)
 
             eval_data['fc_homogeneity'] = [temp_eval_data_df['fchs'].iloc[0]]
         
@@ -73,6 +75,8 @@ def run_all_metrics(scans,
 def run_parcel_eval(parcellations, 
                     metrics, 
                     scans = None,
+                    surface = False,
+                    null_labels = (),
                     parcellation_df = parcellation_dict.parcellation_df,
                     dist_file = None,
                     func_conn_file = None,
@@ -109,16 +113,15 @@ def run_parcel_eval(parcellations,
 
         if parcellation_df is not None:
             parcel_surface_L_data = parcellation_df['surface_file_L'][parcellation_df['parcellation'] == curr_parc].iloc[0]
-
             parcel_surface_R_data = parcellation_df['surface_file_R'][parcellation_df['parcellation'] == curr_parc].iloc[0]
-
-            func_conn_file = parcellation_df['func_conn_file'][parcellation_df['parcellation'] == curr_parc].iloc[0]
+            
 
         if 'fc_homogeneity' in metrics:
             parcellation_file = parcellation_df['parc_file'][parcellation_df['parcellation'] == curr_parc].iloc[0]
-
-            _, parc_fdata = utils.load_data(parcellation_file)
+            _, parc_fdata = utils.load_data(parcellation_file, is_parcellation = True, is_surface = surface, null_labels=null_labels)
+            func_conn_file = None
         else:
+            func_conn_file = parcellation_df['func_conn_file'][parcellation_df['parcellation'] == curr_parc].iloc[0]
             parc_fdata = None
 
         if func_conn_file is not None:
@@ -141,7 +144,7 @@ def run_parcel_eval(parcellations,
         else:
             surface_parc = None 
 
-        temp_eval_data = run_all_metrics(scans, metrics, curr_parc, parc_fdata, dist_file, surface_parc, conn_df, reliability_df, func_conn_col_start)
+        temp_eval_data = run_all_metrics(scans, metrics, curr_parc, parc_fdata, dist_file, surface_parc, conn_df, reliability_df, func_conn_col_start, surface, null_labels)
 
         metric_dfs += [temp_eval_data]
         

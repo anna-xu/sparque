@@ -49,12 +49,25 @@ def get_unique_parcels(atlas_fdata):
     unique_parcs = set(atlas_fdata.ravel().tolist()) - {0}
     return unique_parcs
 
-def load_data(data):
+def load_data(data, is_parcellation = False, is_surface = False, null_labels=()):
     '''
     Loads scan data via nibabel as outputs the loaded scan and fdata
     '''
     loaded_data = nb.load(data)
-    fdata = loaded_data.get_fdata()
+
+    if is_surface:
+        print('Loading surface data')
+        fdata = np.stack([arr.data for arr in loaded_data.darrays]).T
+    else:
+        fdata = loaded_data.get_fdata()
+
+    if is_parcellation:
+        print('Loading parcellation data')
+        fdata = fdata.astype(int)
+        for label in null_labels:
+            if label < 0:
+                label = fdata.max() + 1 + label 
+            fdata[fdata == label] = 0
 
     return loaded_data, fdata 
 

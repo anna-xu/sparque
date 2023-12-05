@@ -1,7 +1,9 @@
 import numpy as np 
 import os
 import pandas as pd 
+import nibabel as nb 
 from nilearn.maskers import NiftiLabelsMasker
+import sparque.utils as utils 
 
 def subset_confounds(confounds, confounds_list, subset_confounds_dir_name):
     '''
@@ -23,7 +25,7 @@ def subset_confounds(confounds, confounds_list, subset_confounds_dir_name):
         curr_counfounds_subset = curr_confounds[confounds_list]
         curr_counfounds_subset.to_csv(f'{subset_confounds_dir_name}/{confound_filename}', sep='\t', index = False)
 
-def run_connectivity(parcellation_file, data, confounds):
+def run_connectivity(parcellation_file, data, confounds = None):
     '''
     Computes parcelwise connectivity matrix
 
@@ -50,14 +52,35 @@ def run_connectivity(parcellation_file, data, confounds):
         verbose=5,
     )
 
-    time_series = masker.fit_transform(
-        data,
-        confounds = confounds
-    )
+    if confounds is None:
+        time_series = masker.fit_transform(data)
+    else:
+        time_series = masker.fit_transform(
+            data,
+            confounds = confounds
+        )
 
     connectivity = np.corrcoef(time_series.T)
 
     return time_series, connectivity
+
+def run_connectivity_surface(parcellation_file, data):
+    '''
+    Computes parcelwise connectivity matrix for surface data
+    '''
+    parcellation = dict(zip(('L', 'R'), parcellation_file))
+    data = dict(zip(('L', 'R'), data))
+    data_lab = dict()
+    for hemi in ['L', 'R']:
+        _,labels = utils.load_data(parcellation[hemi], is_parcellation=True, is_surface = True, null_labels = [0,-1])
+        # labels = nb.load(parcellation[hemi]).darrays[0].data.astype(int)
+        lab_map = np.eye(labels.max() + 1)[labels]
+        data_unlab = np.stack([arr.data for arr in nb.load(data[hemi]).darrays])
+        data_lab[hemi] = lab_map.T @ data_unlab.T
+    # assert 0
+    print('time series shape', np.vstack([data_lab['L'], data_lab['R']]).shape)
+    # print('time series shape', np.corrcoef(np.vstack([data_lab['L'], data_lab['R']]).T).shape)
+    return np.vstack([data_lab['L'], data_lab['R']]), np.corrcoef(np.vstack([data_lab['L'], data_lab['R']]).squeeze())
 
 def get_uniq_conn_vals(conn_mat):
     '''
@@ -65,7 +88,7 @@ def get_uniq_conn_vals(conn_mat):
     '''
     return conn_mat[np.triu_indices_from(conn_mat, 1)]
 
-def conn_from_dir(parc_name, parcellation_file, scans, confounds_subdir, output_name = None):   
+def conn_from_dir(parc_name, parcellation_file, scans, confounds_subdir = None, output_name = None):   
     '''
     Run connectivity for multiple scans and saves parcellated time series in `.h5` file for each parcellation. By default, this function will create a label column with subjects as label. **NOTE: only scan names with format 'sub-{subject name}_ses-{session number}_task-rest_{run}' currently supported. 
 
@@ -74,9 +97,9 @@ def conn_from_dir(parc_name, parcellation_file, scans, confounds_subdir, output_
     parc_name : str
         Name of parcellation
     parcellation_file : str
-        Filepath to parcellation file
+        Filepath to parcellation file or tuple of left and right parcellation file
     scans : array_like
-        List of filepaths as str to scans
+        List of filepaths as str to scans or list of tuples of left and right scans
     confounds_subdir : str
         Path to associated confounds directory
     output_name (optional) : str
@@ -93,26 +116,39 @@ def conn_from_dir(parc_name, parcellation_file, scans, confounds_subdir, output_
 
     time_series_df = {'subject': [], 'session': [], 'time_series': []}
 
-    for _, curr_scan in enumerate(scans):
-        scan_split = str(curr_scan).split("/")[-1].split("_")
+    for curr_scan in scans:
+        if isinstance(curr_scan, tuple):
+            # TO DO LATER: incorporate session info
+            subj_ses_info = curr_scan[0].split("/")[-1].split("_")
+            subjects += [subj_ses_info[0]]
+            sessions += [1]
+            print(f'Currently computing connectivity based on surface data for {subj_ses_info[0]}')
+            time_series_df['subject'].append(subj_ses_info[0])
+            time_series_df['session'].append(1)
+            curr_time_series, curr_conn_mat = run_connectivity_surface(parcellation_file, curr_scan)
+        else:
+            scan_split = str(curr_scan).split("/")[-1].split("_")
 
-        confound_file = f'{confounds_subdir}/{scan_split[0]}_{scan_split[1]}_task-rest_{scan_split[3]}_desc-confounds_timeseries.tsv'
+            if confounds_subdir is not None:
+                confound_file = f'{confounds_subdir}/{scan_split[0]}_{scan_split[1]}_task-rest_{scan_split[3]}_desc-confounds_timeseries.tsv'
+            else:
+                confound_file = None 
 
-        print(f'Currently computing for {scan_split[0]}, {scan_split[1]} with confound file {confound_file}')
+            print(f'Currently computing for {scan_split[0]}, {scan_split[1]} with confound file {confound_file}')
 
-        subjects += [scan_split[0]]
+            subjects += [scan_split[0]]
+            sessions += [scan_split[1]]
 
-        sessions += [scan_split[1]]
+            time_series_df['subject'].append(scan_split[0])
+            time_series_df['session'].append(scan_split[1])
 
-        time_series_df['subject'].append(scan_split[0])
-        time_series_df['session'].append(scan_split[1])
-
-        curr_time_series, curr_conn_mat = run_connectivity(parcellation_file, curr_scan, confound_file)
+            curr_time_series, curr_conn_mat = run_connectivity(parcellation_file, curr_scan, confound_file)
 
         time_series_df['time_series'].append(curr_time_series)
         
         curr_conn_uq = get_uniq_conn_vals(curr_conn_mat)
-        subj_ses = np.array([scan_split[0], scan_split[1]])
+        subj_ses = np.array([subjects[-1], sessions[-1]])
+        # subj_ses = np.array([scan_split[0], scan_split[1]])
 
         curr_data = np.concatenate((subj_ses, curr_conn_uq))
         curr_data_df = pd.DataFrame(data = curr_data)
